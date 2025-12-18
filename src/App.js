@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import { 
-  Search, Map as MapIcon, Shield, X, LogOut, CheckCircle, AlertCircle, 
-  ClipboardList, UserPlus, History, ChevronRight, User, 
-  BarChart2, Calendar, PlusCircle, Edit2, Save, ArrowRight, 
-  TrendingUp, Target, Activity, AlertTriangle, FileText
+  Search, Map as MapIcon, Shield, X, LogOut, CheckCircle, 
+  ClipboardList, UserPlus, BarChart2, PlusCircle, Edit2, Save, ArrowRight, 
+  TrendingUp, Target, Activity, AlertTriangle, CheckSquare, Clock
 } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -22,7 +21,7 @@ const SDO_JURISDICTIONS = [
 ];
 
 // ==========================================
-// 2. STYLING & ANIMATIONS
+// 2. STYLING
 // ==========================================
 const GLOBAL_STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
@@ -36,41 +35,28 @@ const GLOBAL_STYLES = `
   .modern-input:focus { border-color: #2563eb; background: white; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
   .status-badge { padding: 4px 10px; border-radius: 20px; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
   
-  /* SPLASH SCREEN */
-  .splash-container { height: 100vh; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #0f172a; background-image: radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%); background-size: cover; position: relative; padding: 20px; box-sizing: border-box; }
-  .splash-container::before { content: ""; position: absolute; inset: 0; background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px); background-size: 40px 40px; pointer-events: none; }
-  .splash-card { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5); border-radius: 24px; padding: 60px 40px; text-align: center; z-index: 10; max-width: 500px; width: 100%; color: white; animation: fadeInUp 0.8s ease-out forwards; }
-  
-  /* LOGO FIX */
-  .logo-container { 
-    background: white; 
-    width: 110px; 
-    height: 110px; 
-    border-radius: 50%; 
-    display: flex; 
-    align-items: center; 
-    justify-content: center; 
-    margin: 0 auto 30px; 
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3), inset 0 0 20px rgba(0,0,0,0.05);
-    border: 4px solid rgba(255,255,255,0.2);
-  }
+  /* LAYOUT FIXES FOR MOBILE */
+  .app-container { display: flex; flex-direction: column; height: 100vh; padding-top: 65px; padding-bottom: 70px; box-sizing: border-box; overflow: hidden; }
+  .scrollable-content { flex: 1; overflow-y: auto; position: relative; }
+
+  /* SPLASH */
+  .splash-container { height: 100vh; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #0f172a; background-image: radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%); background-size: cover; position: fixed; top: 0; left: 0; z-index: 9999; }
+  .splash-card { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5); border-radius: 24px; padding: 60px 40px; text-align: center; z-index: 10; max-width: 500px; width: 90%; color: white; animation: fadeInUp 0.8s ease-out forwards; }
+  .logo-container { background: white; width: 110px; height: 110px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border: 4px solid rgba(255,255,255,0.2); }
   .splash-btn { background: #3b82f6; color: white; padding: 16px 0; width: 100%; border-radius: 12px; border: none; font-weight: 700; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: all 0.2s; margin-top: 30px; text-transform: uppercase; letter-spacing: 1px; }
   
   /* DASHBOARD CREATIVE */
   .dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 24px; }
   .dash-card { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.03); border: 1px solid #f1f5f9; position: relative; overflow: hidden; }
   .dash-card::after { content: ''; position: absolute; top: 0; right: 0; width: 80px; height: 80px; background: linear-gradient(135deg, transparent 50%, rgba(59, 130, 246, 0.05) 50%); border-radius: 0 0 0 100%; }
+  
   .officer-row { display: flex; align-items: center; padding: 16px; margin-bottom: 12px; background: white; border-radius: 16px; border: 1px solid #f1f5f9; transition: transform 0.2s; }
-  .officer-row:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0,0,0,0.03); border-color: #e2e8f0; }
   .progress-track { width: 100%; height: 6px; background: #f1f5f9; border-radius: 3px; margin-top: 8px; overflow: hidden; }
   .progress-fill { height: 100%; border-radius: 3px; transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); }
 
-  /* ANIMATIONS */
   @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
   .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
   
-  /* SCROLLBAR */
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
   .filter-select { padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 13px; font-weight: 600; outline: none; color: #334155; background: white; }
@@ -79,7 +65,6 @@ const GLOBAL_STYLES = `
   .map-search { position: absolute; top: 20px; left: 20px; right: 20px; z-index: 500; }
 `;
 
-// Leaflet Fixes
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -104,6 +89,7 @@ const getRank = (role) => {
     return 0; 
 };
 
+// SDO compiles ALL -> EE -> SE -> CE
 const getNextStatus = (currentStatus, inspectorRole) => {
     if(currentStatus === 'Pending Compliance') return 'Pending EE';
     if(currentStatus === 'Pending EE') {
@@ -133,7 +119,7 @@ const MapController = ({ center }) => {
 };
 
 const Header = ({ user, onLogout }) => (
-  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1000, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', padding: '12px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
+  <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1000, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', padding: '12px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', height: '65px', boxSizing: 'border-box' }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
       <div style={{ background: 'white', padding: '4px', borderRadius: '50%', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' }}>
           <img src="https://cwc.gov.in/sites/default/files/cwc-logo.png" alt="CWC" style={{ width: '40px', height: '40px', objectFit: 'contain' }} onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/40?text=CWC'; }} />
@@ -144,7 +130,8 @@ const Header = ({ user, onLogout }) => (
   </div>
 );
 
-const Dashboard = ({ data }) => {
+// --- DASHBOARD (STRICT ROLE SPLIT) ---
+const Dashboard = ({ data, user }) => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -156,90 +143,120 @@ const Dashboard = ({ data }) => {
     });
   }, [data.reports, selectedYear, selectedMonth]);
 
-  const officerStats = useMemo(() => {
-     if(!data.officers) return [];
-     return data.officers
+  // ==========================
+  // VIEW 1: SDO DASHBOARD
+  // ==========================
+  if (user.level === 'SDO') {
+      const myJurisdiction = (user.jurisdiction || "").toLowerCase();
+      
+      const relevantReports = data.reports.filter(r => {
+          const siteMatch = myJurisdiction.includes(r.site.toLowerCase()) || (r.district && myJurisdiction.includes(r.district.toLowerCase()));
+          return siteMatch;
+      });
+
+      const pendingCompliance = relevantReports.filter(r => r.status === 'Pending Compliance').length;
+      const submitted = relevantReports.filter(r => r.status !== 'Pending Compliance' && r.status !== 'Closed').length;
+      const closed = relevantReports.filter(r => r.status === 'Closed').length;
+
+      return (
+        <div style={{ padding: '24px' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: '900', color: '#1e293b', marginBottom: '20px' }}>Compliance Dashboard</h2>
+            <div className="dash-grid">
+                <div className="dash-card">
+                    <div>
+                        <div style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Action Required</div>
+                        <div style={{ fontSize: '28px', fontWeight: '900', color: '#f59e0b', marginTop: '4px' }}>{pendingCompliance}</div>
+                    </div>
+                    <div style={{ background: '#fffbeb', padding: '8px', borderRadius: '50%', color: '#f59e0b', position: 'absolute', top: '20px', right: '20px' }}><AlertTriangle size={20}/></div>
+                </div>
+                <div className="dash-card">
+                    <div>
+                        <div style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>In Review</div>
+                        <div style={{ fontSize: '28px', fontWeight: '900', color: '#3b82f6', marginTop: '4px' }}>{submitted}</div>
+                    </div>
+                    <div style={{ background: '#eff6ff', padding: '8px', borderRadius: '50%', color: '#3b82f6', position: 'absolute', top: '20px', right: '20px' }}><Clock size={20}/></div>
+                </div>
+                <div className="dash-card">
+                    <div>
+                        <div style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Closed</div>
+                        <div style={{ fontSize: '28px', fontWeight: '900', color: '#10b981', marginTop: '4px' }}>{closed}</div>
+                    </div>
+                    <div style={{ background: '#ecfdf5', padding: '8px', borderRadius: '50%', color: '#10b981', position: 'absolute', top: '20px', right: '20px' }}><CheckSquare size={20}/></div>
+                </div>
+            </div>
+            <div style={{ marginTop: '20px', padding: '16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', color: '#64748b', fontSize: '13px' }}>
+                <strong style={{color:'#1e293b'}}>Your Jurisdiction:</strong> {user.jurisdiction || "Not Assigned"}
+            </div>
+        </div>
+      );
+  }
+
+  // ==========================
+  // VIEW 2: SUPERIOR DASHBOARD (Admin/CE/SE/EE)
+  // ==========================
+  
+  const officerStats = data.officers
         .filter(o => o.level !== 'ADMIN')
+        .filter(o => {
+             if (user.level === 'EE') return o.level === 'SDO' || o.name === user.name;
+             if (user.level === 'SE') return ['EE','SDO'].includes(o.level) || o.name === user.name;
+             return true; 
+        })
         .map(o => {
             const myReports = monthlyReports.filter(r => r.officer === o.name);
             const totalSites = data.sites.length; 
             
-            let targetMin = 0;
-            let targetLabel = "";
-            
+            let targetMin = 0; let targetLabel = "";
             if(o.level === 'EE') { targetMin = 3; targetLabel = "Target: 3-5"; } 
             else if (o.level === 'SE') { targetMin = 3; targetLabel = "Target: 3-4"; } 
-            else if (o.level === 'SDO' || o.level === 'AEE') { targetMin = Math.ceil(totalSites * 0.33); targetLabel = `Target: ~${targetMin} (33%)`; } 
-            else if (o.level === 'JE') { targetMin = totalSites; targetLabel = `Target: ${totalSites} (100%)`; } 
+            else if (o.level === 'SDO') { targetMin = Math.ceil(totalSites * 0.33); targetLabel = `Target: 33%`; } 
+            else if (o.level === 'JE') { targetMin = totalSites; targetLabel = `Target: 100%`; } 
             else { targetLabel = "As Required"; }
-
+            
             const percentage = targetMin > 0 ? Math.min(100, (myReports.length / targetMin) * 100) : 100;
             let color = percentage >= 100 ? "#10b981" : percentage >= 50 ? "#f59e0b" : "#ef4444";
-
+            
             return { name: o.name, desig: o.designation, level: o.level, count: myReports.length, targetLabel, percentage, color };
         })
         .sort((a,b) => b.percentage - a.percentage); 
-  }, [data.officers, monthlyReports, data.sites.length]);
 
   return (
-    <div style={{ padding: '24px', paddingBottom: '100px', height: '100%', overflowY: 'auto', background: '#f8fafc' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ fontSize: '22px', fontWeight: '900', color: '#1e293b', margin: 0 }}>Inspection Analytics</h2>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                  <select className="filter-select" value={selectedMonth} onChange={e=>setSelectedMonth(e.target.value)}>{months.map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
-                  <select className="filter-select" value={selectedYear} onChange={e=>setSelectedYear(e.target.value)}><option value="2025">2025</option><option value="2026">2026</option></select>
-              </div>
+    <div style={{ padding: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+          <h2 style={{ fontSize: '20px', fontWeight: '900', color: '#1e293b' }}>Inspection Performance</h2>
+          <div style={{ display: 'flex', gap: '8px' }}>
+              <select className="filter-select" value={selectedMonth} onChange={e=>setSelectedMonth(e.target.value)}>{months.map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
+              <select className="filter-select" value={selectedYear} onChange={e=>setSelectedYear(e.target.value)}><option value="2025">2025</option><option value="2026">2026</option></select>
           </div>
       </div>
+      
       <div className="dash-grid">
           <div className="dash-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                  <div><div style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Inspections</div><div style={{ fontSize: '28px', fontWeight: '900', color: '#1e293b', marginTop: '4px' }}>{monthlyReports.length}</div></div>
-                  <div style={{ background: '#eff6ff', padding: '8px', borderRadius: '50%', color: '#3b82f6' }}><Activity size={20}/></div>
-              </div>
-              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '8px' }}>In {months[selectedMonth]}</div>
+              <div><div style={{ fontSize: '11px', fontWeight: '700', color: '#64748b' }}>TOTAL INSPECTIONS</div><div style={{ fontSize: '28px', fontWeight: '900', color: '#1e293b' }}>{monthlyReports.length}</div></div>
+              <div style={{ position: 'absolute', top: '20px', right: '20px', color: '#3b82f6' }}><Activity size={20}/></div>
           </div>
           <div className="dash-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                  <div><div style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Active Sites</div><div style={{ fontSize: '28px', fontWeight: '900', color: '#1e293b', marginTop: '4px' }}>{new Set(monthlyReports.map(r => r.site)).size}</div></div>
-                  <div style={{ background: '#ecfdf5', padding: '8px', borderRadius: '50%', color: '#10b981' }}><Target size={20}/></div>
-              </div>
-              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '8px' }}>Unique locations visited</div>
-          </div>
-          <div className="dash-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                  <div><div style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Pending</div><div style={{ fontSize: '28px', fontWeight: '900', color: '#f59e0b', marginTop: '4px' }}>{monthlyReports.filter(r => r.status !== 'Closed').length}</div></div>
-                  <div style={{ background: '#fffbeb', padding: '8px', borderRadius: '50%', color: '#f59e0b' }}><AlertTriangle size={20}/></div>
-              </div>
-              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '8px' }}>Need Compliance</div>
+              <div><div style={{ fontSize: '11px', fontWeight: '700', color: '#64748b' }}>SITES VISITED</div><div style={{ fontSize: '28px', fontWeight: '900', color: '#10b981' }}>{new Set(monthlyReports.map(r => r.site)).size}</div></div>
+              <div style={{ position: 'absolute', top: '20px', right: '20px', color: '#10b981' }}><Target size={20}/></div>
           </div>
       </div>
-      <div>
-          <h3 style={{ fontSize: '15px', fontWeight: '800', color: '#334155', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}><TrendingUp size={18} className="text-blue-600"/> Officer Performance vs Norms</h3>
-          {officerStats.length === 0 && <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', background: 'white', borderRadius: '16px' }}>No inspections recorded for this period.</div>}
-          {officerStats.map((o, i) => (
-              <div key={i} className="officer-row">
-                  <div style={{ width: '100%' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                              <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: `${o.color}15`, color: o.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '13px' }}>{o.name.charAt(0)}</div>
-                              <div><div style={{ fontSize: '14px', fontWeight: '700', color: '#1e293b' }}>{o.name}</div><div style={{ fontSize: '11px', color: '#64748b' }}>{o.desig}</div></div>
-                          </div>
-                          <div style={{ textAlign: 'right' }}><span style={{ fontSize: '14px', fontWeight: '800', color: o.color }}>{o.count}</span><span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: '4px' }}>Visits</span></div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <div className="progress-track"><div className="progress-fill" style={{ width: `${o.percentage}%`, background: `linear-gradient(90deg, ${o.color}, ${o.color}dd)` }}></div></div>
-                          <div style={{ fontSize: '10px', fontWeight: '600', color: '#64748b', whiteSpace: 'nowrap', minWidth: '80px', textAlign: 'right' }}>{o.targetLabel}</div>
-                      </div>
+
+      <h3 style={{ fontSize: '15px', fontWeight: '800', color: '#334155', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}><TrendingUp size={18} className="text-blue-600"/> Team Performance vs Norms</h3>
+      {officerStats.length === 0 && <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', background: 'white', borderRadius: '16px' }}>No data available for this month.</div>}
+      {officerStats.map((o, i) => (
+          <div key={i} className="officer-row">
+              <div style={{ width: '100%' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <div style={{ fontWeight: '700', fontSize: '14px' }}>{o.name} <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '400' }}>({o.desig})</span></div>
+                      <div style={{ fontSize: '14px', fontWeight: '800', color: o.color }}>{o.count} <span style={{fontSize:'10px', color:'#94a3b8'}}>Visits</span></div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div className="progress-track"><div className="progress-fill" style={{ width: `${o.percentage}%`, background: o.color }}></div></div>
+                      <div style={{ fontSize: '10px', color: '#64748b', minWidth: '70px', textAlign: 'right' }}>{o.targetLabel}</div>
                   </div>
               </div>
-          ))}
-      </div>
-      <div style={{ marginTop: '20px', padding: '16px', background: '#f0f9ff', borderRadius: '12px', border: '1px solid #bae6fd', display: 'flex', gap: '10px', alignItems: 'start' }}>
-          <div style={{ color: '#0284c7' }}><FileText size={18}/></div>
-          <div style={{ fontSize: '11px', color: '#0c4a6e', lineHeight: '1.5' }}><strong>Norms Reference:</strong><br/>• <strong>SE:</strong> 3-4 visits/month (Circle dependent).<br/>• <strong>EE:</strong> 3-5 visits/month.<br/>• <strong>SDE/AEE:</strong> 33% sites/month (100% quarterly).<br/>• <strong>JE:</strong> 100% sites/month.</div>
-      </div>
+          </div>
+      ))}
     </div>
   );
 };
@@ -277,7 +294,7 @@ export default function App() {
         console.warn("Using Fallback");
         setData(FALLBACK_DATA);
       } finally {
-        const saved = localStorage.getItem('cwc_v28_user');
+        const saved = localStorage.getItem('cwc_v32_user');
         if(saved) {
           const u = JSON.parse(saved);
           setUser(u);
@@ -294,7 +311,7 @@ export default function App() {
     if(p) {
         if(String(officer.password).trim() === String(p).trim()) {
           setUser(officer);
-          localStorage.setItem('cwc_v28_user', JSON.stringify(officer));
+          localStorage.setItem('cwc_v32_user', JSON.stringify(officer));
           setView('APP');
           setActiveTab(officer.level === 'ADMIN' ? 'ADMIN' : 'HOME');
         } else {
@@ -331,13 +348,22 @@ export default function App() {
           nextStatus = getNextStatus(report.status, report.inspectorRole);
       }
 
+      // Update Local State IMMEDIATELY
+      const updatedReports = data.reports.map(r => {
+          if (r.id === report.id) {
+              return { 
+                  ...r, 
+                  status: nextStatus,
+                  complianceNote: complianceNote || r.complianceNote
+              };
+          }
+          return r;
+      });
+      setData(prev => ({ ...prev, reports: updatedReports }));
+
       try {
           await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'UPDATE_STATUS', rowId: report.id, status: nextStatus, note: complianceNote }) });
           alert(`Status Updated to: ${nextStatus}`);
-          setData(prev => ({
-              ...prev,
-              reports: prev.reports.map(r => r.id === report.id ? { ...r, status: nextStatus } : r)
-          }));
       } catch(e) { alert("Error updating status"); }
   };
 
@@ -381,15 +407,20 @@ export default function App() {
 
   const filteredSites = useMemo(() => {
     if(!user || !data.sites) return [];
-    const rawJuris = user.jurisdiction || 'ALL';
-    const allowed = rawJuris.toUpperCase().split(',').map(d => d.trim());
-    const isBoss = ['ADMIN','CE','SE'].includes(user.level) || allowed.includes('ALL');
+    
+    // Strict Jurisdiction Filter Logic
+    const userJurisdiction = (user.jurisdiction || "").toLowerCase();
+    const isBoss = ['ADMIN','CE','SE','EE'].includes(user.level) || userJurisdiction.includes('all');
+    
     return data.sites.filter(s => {
-       const siteName = (s.name || '').toUpperCase();
-       const districtName = (s.district || '').toUpperCase();
-       const matchSearch = (siteName + districtName).includes(searchTerm.toUpperCase());
-       const matchJuris = isBoss || allowed.some(a => districtName.includes(a) || siteName.includes(a));
-       return matchSearch && matchJuris;
+       const siteName = (s.name || '').toLowerCase();
+       const districtName = (s.district || '').toLowerCase();
+       
+       // SDO/JE Tunnel Vision Logic
+       const isMapped = isBoss || userJurisdiction.includes(siteName) || userJurisdiction.includes(districtName);
+       const matchSearch = (siteName + districtName).includes(searchTerm.toLowerCase());
+       
+       return matchSearch && isMapped;
     });
   }, [data.sites, searchTerm, user]);
 
@@ -450,10 +481,10 @@ export default function App() {
   );
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
-      <Header user={user} onLogout={() => { localStorage.removeItem('cwc_v28_user'); setView('LOGIN'); }} />
-      <div style={{ flex: 1, position: 'relative', marginTop: '65px' }}>
-        {activeTab === 'DASHBOARD' && <Dashboard data={data} />}
+    <div className="app-container">
+      <Header user={user} onLogout={() => { localStorage.removeItem('cwc_v32_user'); setView('LOGIN'); }} />
+      <div className="scrollable-content">
+        {activeTab === 'DASHBOARD' && <Dashboard data={data} user={user} />}
         
         {/* MAP TAB */}
         <div style={{ position: 'absolute', inset: 0, opacity: activeTab==='HOME'?1:0, pointerEvents: activeTab==='HOME'?'auto':'none' }}>
@@ -488,7 +519,7 @@ export default function App() {
                          </div>
                       ))}
                    </div>
-                   {user.level !== 'ADMIN' && (
+                   {user.level !== 'ADMIN' && user.level !== 'SDO' && (
                       <div><textarea id="obs" className="modern-input" placeholder="Add new observation..." style={{ height: '80px', resize: 'none', marginBottom: '10px' }}></textarea><button onClick={() => submitObservation(document.getElementById('obs').value)} style={{ width: '100%', padding: '14px', background: '#1e3a8a', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '700', cursor: 'pointer' }}>Submit Observation</button></div>
                    )}
                 </div>
@@ -519,16 +550,28 @@ export default function App() {
                            <span className="status-badge" style={{ background: '#e0f2fe', color: '#0369a1' }}>{r.status}</span>
                        </div>
                        <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '15px' }}>
-                           <div><strong>Observation by {r.inspectorRole}:</strong> "{r.remarks}"</div>
+                           <div style={{ marginBottom: '8px' }}><strong>Observation by {r.inspectorRole}:</strong> "{r.remarks}"</div>
+                           {/* SHOW COMPLIANCE NOTE */}
+                           {r.complianceNote && (
+                               <div style={{ background: '#ecfdf5', padding: '10px', borderRadius: '8px', border: '1px solid #a7f3d0', color: '#065f46' }}>
+                                   <strong>SDO Compliance:</strong> "{r.complianceNote}"
+                               </div>
+                           )}
                        </div>
+                       
+                       {/* SDO: SUBMIT COMPLIANCE */}
                        {showSDO && (
                            <div>
-                               <textarea id={`comp-${r.id}`} className="modern-input" placeholder="Enter compliance details..." style={{ height: '60px', marginBottom: '10px' }}></textarea>
+                               <textarea id={`comp-${r.id}`} className="modern-input" placeholder="Enter compliance details (Action taken)..." style={{ height: '60px', marginBottom: '10px' }}></textarea>
                                <button onClick={()=>handleWorkflowAction(r, 'COMPLY', document.getElementById(`comp-${r.id}`).value)} style={{ width: '100%', padding: '10px', background: '#2563eb', color: 'white', borderRadius: '8px', fontWeight: '700', border:'none' }}>Submit Compliance</button>
                            </div>
                        )}
+
+                       {/* EE/SE/CE: APPROVE/FORWARD */}
                        {(showEE || showSE || showCE) && (
-                           <button onClick={()=>handleWorkflowAction(r, 'APPROVE')} style={{ width: '100%', padding: '12px', background: '#059669', color: 'white', borderRadius: '8px', fontWeight: '700', border:'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}><CheckCircle size={16}/> Verify & Approve</button>
+                           <button onClick={()=>handleWorkflowAction(r, 'APPROVE')} style={{ width: '100%', padding: '12px', background: '#059669', color: 'white', borderRadius: '8px', fontWeight: '700', border:'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                               <CheckCircle size={16}/> Verify & Approve
+                           </button>
                        )}
                     </div>
                  );
@@ -601,7 +644,7 @@ export default function App() {
            </div>
         )}
       </div>
-      <div style={{ height: '70px', background: 'white', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-around', alignItems: 'center', zIndex: 2000 }}>
+      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, height: '70px', background: 'white', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-around', alignItems: 'center', zIndex: 2000 }}>
          {user?.level !== 'SDO' && <NavBtn icon={<BarChart2 size={24}/>} label="Stats" active={activeTab==='DASHBOARD'} onClick={()=>setActiveTab('DASHBOARD')} />}
          <NavBtn icon={<MapIcon size={24}/>} label="Map" active={activeTab==='HOME'} onClick={()=>setActiveTab('HOME')} />
          {user?.level !== 'ADMIN' && <NavBtn icon={<ClipboardList size={24}/>} label="Tasks" active={activeTab==='APPROVALS'} onClick={()=>setActiveTab('APPROVALS')} />}
