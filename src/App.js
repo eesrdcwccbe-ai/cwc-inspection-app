@@ -104,7 +104,6 @@ const getRank = (role) => {
     return 0; 
 };
 
-// --- LOGIC: SDO compiles ALL -> EE -> SE -> CE ---
 const getNextStatus = (currentStatus, inspectorRole) => {
     if(currentStatus === 'Pending Compliance') return 'Pending EE';
     if(currentStatus === 'Pending EE') {
@@ -145,7 +144,6 @@ const Header = ({ user, onLogout }) => (
   </div>
 );
 
-// --- DASHBOARD ---
 const Dashboard = ({ data }) => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
@@ -279,7 +277,7 @@ export default function App() {
         console.warn("Using Fallback");
         setData(FALLBACK_DATA);
       } finally {
-        const saved = localStorage.getItem('cwc_v27_user');
+        const saved = localStorage.getItem('cwc_v28_user');
         if(saved) {
           const u = JSON.parse(saved);
           setUser(u);
@@ -291,14 +289,17 @@ export default function App() {
     init();
   }, []);
 
-  const handleLogin = (u, p) => {
-    if(String(u.password).trim() === String(p).trim()) {
-      setUser(u);
-      localStorage.setItem('cwc_v27_user', JSON.stringify(u));
-      setView('APP');
-      setActiveTab(u.level === 'ADMIN' ? 'ADMIN' : 'HOME');
-    } else {
-      alert("Invalid Password");
+  const triggerLogin = (officer) => {
+    const p = prompt(`Password for ${officer.name}`);
+    if(p) {
+        if(String(officer.password).trim() === String(p).trim()) {
+          setUser(officer);
+          localStorage.setItem('cwc_v28_user', JSON.stringify(officer));
+          setView('APP');
+          setActiveTab(officer.level === 'ADMIN' ? 'ADMIN' : 'HOME');
+        } else {
+          alert("Invalid Password");
+        }
     }
   };
 
@@ -325,10 +326,8 @@ export default function App() {
       let nextStatus = '';
       
       if(actionType === 'COMPLY') {
-          // SDO Action: Always goes to EE first
           nextStatus = 'Pending EE';
       } else if (actionType === 'APPROVE') {
-          // EE/SE/CE Action: Follows hierarchy
           nextStatus = getNextStatus(report.status, report.inspectorRole);
       }
 
@@ -407,6 +406,8 @@ export default function App() {
       return [...dists, ...sites].sort();
   }, [data.sites]);
 
+  // --- VIEWS ---
+
   if (view === 'SPLASH') return (
     <div className="splash-container">
       <div className="splash-card">
@@ -433,7 +434,7 @@ export default function App() {
         </div>
         <div style={{ overflowY: 'auto', padding: '10px' }}>
           {sortedOfficers.map((o, i) => (
-            <div key={i} onClick={() => { const p = prompt(`Password for ${o.name}`); if(p) handleLogin(o,p); }} 
+            <div key={i} onClick={() => triggerLogin(o)} 
                  style={{ padding: '15px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', marginBottom: '5px' }}
                  onMouseOver={(e) => e.currentTarget.style.background = '#f8fafc'}
                  onMouseOut={(e) => e.currentTarget.style.background = 'white'}>
@@ -450,7 +451,7 @@ export default function App() {
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
-      <Header user={user} onLogout={() => { localStorage.removeItem('cwc_v27_user'); setView('LOGIN'); }} />
+      <Header user={user} onLogout={() => { localStorage.removeItem('cwc_v28_user'); setView('LOGIN'); }} />
       <div style={{ flex: 1, position: 'relative', marginTop: '65px' }}>
         {activeTab === 'DASHBOARD' && <Dashboard data={data} />}
         
@@ -463,7 +464,7 @@ export default function App() {
                 <Marker key={site.id} position={[site.lat, site.lng]} icon={createPin(site.status === 'Inspected' ? '#10b981' : '#3b82f6')} eventHandlers={{ click: () => setSelectedSite(site) }} />
               ))}
            </MapContainer>
-           <div className="map-search" style={{ position: 'absolute', top: '20px', left: '20px', right: '20px', z-index: 500 }}>
+           <div className="map-search" style={{ position: 'absolute', top: '20px', left: '20px', right: '20px', zIndex: 500 }}>
               <div style={{ background: 'white', borderRadius: '16px', padding: '10px 16px', boxShadow: '0 8px 20px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: '12px' }}>
                  <Search size={20} color="#94a3b8"/><input className="modern-input" style={{ border: 'none', background: 'transparent', padding: '5px 0', fontSize: '16px' }} placeholder="Search sites..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
               </div>
@@ -495,21 +496,15 @@ export default function App() {
            )}
         </div>
 
-        {/* TASKS TAB (Updated Logic for 10 SDOs) */}
+        {/* TASKS TAB */}
         {activeTab === 'APPROVALS' && (
            <div style={{ padding: '20px', height: '100%', overflowY: 'auto' }}>
               <h2 style={{ fontSize: '20px', fontWeight: '900', marginBottom: '20px' }}>Pending Actions</h2>
               {data.reports.map((r, i) => {
-                 
-                 // *** UPDATED SDO LOGIC: Check Jurisdiction ***
                  const userJurisdiction = (user.jurisdiction || "").toLowerCase();
-                 // Assuming report jurisdiction/site data matches string in user jurisdiction 
-                 const reportSite = (r.site || "").toLowerCase(); 
-                 
-                 // SDO sees site if site name or district is in their jurisdiction string
+                 const reportSite = (r.site || "").toLowerCase();
                  const isSiteInJurisdiction = userJurisdiction === 'all' || userJurisdiction.includes(reportSite);
 
-                 // FILTER: Only show what this user needs to act on
                  const showSDO = user.level === 'SDO' && r.status === 'Pending Compliance' && isSiteInJurisdiction;
                  const showEE  = user.level === 'EE' && r.status === 'Pending EE';
                  const showSE  = user.level === 'SE' && r.status === 'Pending SE';
@@ -526,20 +521,14 @@ export default function App() {
                        <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '15px' }}>
                            <div><strong>Observation by {r.inspectorRole}:</strong> "{r.remarks}"</div>
                        </div>
-                       
-                       {/* SDO: SUBMIT COMPLIANCE */}
                        {showSDO && (
                            <div>
                                <textarea id={`comp-${r.id}`} className="modern-input" placeholder="Enter compliance details..." style={{ height: '60px', marginBottom: '10px' }}></textarea>
                                <button onClick={()=>handleWorkflowAction(r, 'COMPLY', document.getElementById(`comp-${r.id}`).value)} style={{ width: '100%', padding: '10px', background: '#2563eb', color: 'white', borderRadius: '8px', fontWeight: '700', border:'none' }}>Submit Compliance</button>
                            </div>
                        )}
-
-                       {/* EE/SE/CE: APPROVE/FORWARD */}
                        {(showEE || showSE || showCE) && (
-                           <button onClick={()=>handleWorkflowAction(r, 'APPROVE')} style={{ width: '100%', padding: '12px', background: '#059669', color: 'white', borderRadius: '8px', fontWeight: '700', border:'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                               <CheckCircle size={16}/> Verify & Approve
-                           </button>
+                           <button onClick={()=>handleWorkflowAction(r, 'APPROVE')} style={{ width: '100%', padding: '12px', background: '#059669', color: 'white', borderRadius: '8px', fontWeight: '700', border:'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}><CheckCircle size={16}/> Verify & Approve</button>
                        )}
                     </div>
                  );
@@ -548,7 +537,7 @@ export default function App() {
            </div>
         )}
 
-        {/* ADMIN TAB (Updated with 10 SDOs) */}
+        {/* ADMIN TAB */}
         {activeTab === 'ADMIN' && (
            <div style={{ padding: '20px', height: '100%', overflowY: 'auto' }}>
               <h2 style={{ fontSize: '20px', fontWeight: '900', marginBottom: '20px' }}>User Management</h2>
@@ -566,15 +555,12 @@ export default function App() {
                          <input name="d" placeholder="Designation" className="modern-input" required/>
                          <input name="o" placeholder="Office" className="modern-input" required/>
                       </div>
-                      
-                      {/* JURISDICTION HELPER */}
                       <div>
                           <input name="j" placeholder="Jurisdiction (Type or Select below)" className="modern-input" required value={jurisdictionInput} onChange={(e) => setJurisdictionInput(e.target.value)}/>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
                              <PlusCircle size={16} color="#64748b" />
                              <select className="filter-select" style={{ width: '100%' }} onChange={(e) => handleJurisdictionAdd(e.target.value)}>
                                  <option value="">Quick Add Location...</option>
-                                 {/* CONDITIONAL DROPDOWN CONTENT */}
                                  {selectedRole === 'SDO' ? (
                                      <>
                                         <option disabled>--- 10 SDO Jurisdictions ---</option>
@@ -590,7 +576,6 @@ export default function App() {
                              </select>
                           </div>
                       </div>
-
                       <select name="l" className="modern-input" value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)}>
                           <option value="SDO">SDO (Compliance)</option>
                           <option value="EE">EE (Executive Eng.)</option>
@@ -598,7 +583,6 @@ export default function App() {
                           <option value="CE">CE (Chief Eng.)</option>
                           <option value="ADMIN">Admin</option>
                       </select>
-                      
                       <input name="p" placeholder="Set Password" className="modern-input" required/>
                       <button style={{ padding: '12px', background: isEditing?'#f59e0b':'#1e3a8a', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>{isEditing ? <Save size={16}/> : <UserPlus size={16}/>}{isEditing ? "Update Account" : "Create Account"}</button>
                   </form>
