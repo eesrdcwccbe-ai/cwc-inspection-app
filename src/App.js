@@ -14,17 +14,10 @@ import 'leaflet/dist/leaflet.css';
 // ==========================================
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw5JxCupI52bftlLMTvQtw3cdCdgb8_FKzyifm9w-MzI2crT0Nk6SsdH0haapPv0Heq/exec"; 
 
-// 10 SDO Jurisdictions (Pre-defined for Admin Mapping)
 const SDO_JURISDICTIONS = [
-    "Coimbatore Sub-Division",
-    "Trichy Sub-Division",
-    "Madurai Sub-Division", 
-    "Thanjavur Sub-Division",
-    "Salem Sub-Division",
-    "Erode Sub-Division",
-    "Karur Sub-Division",
-    "Tirunelveli Sub-Division",
-    "Vellore Sub-Division",
+    "Coimbatore Sub-Division", "Trichy Sub-Division", "Madurai Sub-Division", 
+    "Thanjavur Sub-Division", "Salem Sub-Division", "Erode Sub-Division",
+    "Karur Sub-Division", "Tirunelveli Sub-Division", "Vellore Sub-Division",
     "Dharmapuri Sub-Division"
 ];
 
@@ -67,10 +60,8 @@ const GLOBAL_STYLES = `
   .dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 24px; }
   .dash-card { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.03); border: 1px solid #f1f5f9; position: relative; overflow: hidden; }
   .dash-card::after { content: ''; position: absolute; top: 0; right: 0; width: 80px; height: 80px; background: linear-gradient(135deg, transparent 50%, rgba(59, 130, 246, 0.05) 50%); border-radius: 0 0 0 100%; }
-  
   .officer-row { display: flex; align-items: center; padding: 16px; margin-bottom: 12px; background: white; border-radius: 16px; border: 1px solid #f1f5f9; transition: transform 0.2s; }
   .officer-row:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0,0,0,0.03); border-color: #e2e8f0; }
-  
   .progress-track { width: 100%; height: 6px; background: #f1f5f9; border-radius: 3px; margin-top: 8px; overflow: hidden; }
   .progress-fill { height: 100%; border-radius: 3px; transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); }
 
@@ -270,7 +261,7 @@ export default function App() {
   
   // Admin State
   const [jurisdictionInput, setJurisdictionInput] = useState('');
-  const [selectedRole, setSelectedRole] = useState('SDO'); // New state to track role for dropdown
+  const [selectedRole, setSelectedRole] = useState('SDO'); 
   const [isEditing, setIsEditing] = useState(false);
   const [originalName, setOriginalName] = useState('');
 
@@ -288,7 +279,7 @@ export default function App() {
         console.warn("Using Fallback");
         setData(FALLBACK_DATA);
       } finally {
-        const saved = localStorage.getItem('cwc_v26_user');
+        const saved = localStorage.getItem('cwc_v27_user');
         if(saved) {
           const u = JSON.parse(saved);
           setUser(u);
@@ -303,7 +294,7 @@ export default function App() {
   const handleLogin = (u, p) => {
     if(String(u.password).trim() === String(p).trim()) {
       setUser(u);
-      localStorage.setItem('cwc_v26_user', JSON.stringify(u));
+      localStorage.setItem('cwc_v27_user', JSON.stringify(u));
       setView('APP');
       setActiveTab(u.level === 'ADMIN' ? 'ADMIN' : 'HOME');
     } else {
@@ -389,7 +380,6 @@ export default function App() {
     setJurisdictionInput(newVal);
   };
 
-  // --- FILTER LOGIC ---
   const filteredSites = useMemo(() => {
     if(!user || !data.sites) return [];
     const rawJuris = user.jurisdiction || 'ALL';
@@ -416,8 +406,6 @@ export default function App() {
       const sites = data.sites.map(s => s.name).filter(Boolean);
       return [...dists, ...sites].sort();
   }, [data.sites]);
-
-  // --- VIEWS ---
 
   if (view === 'SPLASH') return (
     <div className="splash-container">
@@ -462,7 +450,7 @@ export default function App() {
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
-      <Header user={user} onLogout={() => { localStorage.removeItem('cwc_v26_user'); setView('LOGIN'); }} />
+      <Header user={user} onLogout={() => { localStorage.removeItem('cwc_v27_user'); setView('LOGIN'); }} />
       <div style={{ flex: 1, position: 'relative', marginTop: '65px' }}>
         {activeTab === 'DASHBOARD' && <Dashboard data={data} />}
         
@@ -475,7 +463,7 @@ export default function App() {
                 <Marker key={site.id} position={[site.lat, site.lng]} icon={createPin(site.status === 'Inspected' ? '#10b981' : '#3b82f6')} eventHandlers={{ click: () => setSelectedSite(site) }} />
               ))}
            </MapContainer>
-           <div className="map-search" style={{ position: 'absolute', top: '20px', left: '20px', right: '20px', zIndex: 500 }}>
+           <div className="map-search" style={{ position: 'absolute', top: '20px', left: '20px', right: '20px', z-index: 500 }}>
               <div style={{ background: 'white', borderRadius: '16px', padding: '10px 16px', boxShadow: '0 8px 20px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: '12px' }}>
                  <Search size={20} color="#94a3b8"/><input className="modern-input" style={{ border: 'none', background: 'transparent', padding: '5px 0', fontSize: '16px' }} placeholder="Search sites..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
               </div>
@@ -515,7 +503,10 @@ export default function App() {
                  
                  // *** UPDATED SDO LOGIC: Check Jurisdiction ***
                  const userJurisdiction = (user.jurisdiction || "").toLowerCase();
-                 const reportSite = (r.site || "").toLowerCase();
+                 // Assuming report jurisdiction/site data matches string in user jurisdiction 
+                 const reportSite = (r.site || "").toLowerCase(); 
+                 
+                 // SDO sees site if site name or district is in their jurisdiction string
                  const isSiteInJurisdiction = userJurisdiction === 'all' || userJurisdiction.includes(reportSite);
 
                  // FILTER: Only show what this user needs to act on
