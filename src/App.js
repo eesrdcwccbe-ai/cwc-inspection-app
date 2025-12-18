@@ -14,6 +14,20 @@ import 'leaflet/dist/leaflet.css';
 // ==========================================
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw5JxCupI52bftlLMTvQtw3cdCdgb8_FKzyifm9w-MzI2crT0Nk6SsdH0haapPv0Heq/exec"; 
 
+// 10 SDO Jurisdictions (Pre-defined for Admin Mapping)
+const SDO_JURISDICTIONS = [
+    "Coimbatore Sub-Division",
+    "Trichy Sub-Division",
+    "Madurai Sub-Division", 
+    "Thanjavur Sub-Division",
+    "Salem Sub-Division",
+    "Erode Sub-Division",
+    "Karur Sub-Division",
+    "Tirunelveli Sub-Division",
+    "Vellore Sub-Division",
+    "Dharmapuri Sub-Division"
+];
+
 // ==========================================
 // 2. STYLING & ANIMATIONS
 // ==========================================
@@ -71,6 +85,7 @@ const GLOBAL_STYLES = `
   .filter-select { padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 13px; font-weight: 600; outline: none; color: #334155; background: white; }
   .user-list-item { display: flex; align-items: center; justify-content: space-between; padding: 12px; border-bottom: 1px solid #f1f5f9; background: white; }
   .edit-btn { background: #eff6ff; color: #2563eb; border: none; padding: 8px; borderRadius: 8px; cursor: pointer; }
+  .map-search { position: absolute; top: 20px; left: 20px; right: 20px; z-index: 500; }
 `;
 
 // Leaflet Fixes
@@ -87,7 +102,7 @@ const createPin = (color) => L.divIcon({
 });
 
 // ==========================================
-// 3. LOGIC UTILS
+// 3. WORKFLOW ENGINE
 // ==========================================
 
 const getRank = (role) => {
@@ -98,18 +113,22 @@ const getRank = (role) => {
     return 0; 
 };
 
+// --- LOGIC: SDO compiles ALL -> EE -> SE -> CE ---
 const getNextStatus = (currentStatus, inspectorRole) => {
-    const inspectorRank = getRank(inspectorRole);
     if(currentStatus === 'Pending Compliance') return 'Pending EE';
     if(currentStatus === 'Pending EE') {
-        if(inspectorRank <= 2) return 'Closed';
+        const inspectorRank = getRank(inspectorRole);
+        if(inspectorRank <= 2) return 'Closed'; 
         return 'Pending SE';
     }
     if(currentStatus === 'Pending SE') {
+        const inspectorRank = getRank(inspectorRole);
         if(inspectorRank <= 3) return 'Closed';
         return 'Pending CE';
     }
-    if(currentStatus === 'Pending CE') return 'Closed';
+    if(currentStatus === 'Pending CE') {
+        return 'Closed';
+    }
     return currentStatus;
 };
 
@@ -126,7 +145,6 @@ const MapController = ({ center }) => {
 const Header = ({ user, onLogout }) => (
   <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1000, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', padding: '12px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-      {/* HEADER LOGO FIX */}
       <div style={{ background: 'white', padding: '4px', borderRadius: '50%', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' }}>
           <img src="https://cwc.gov.in/sites/default/files/cwc-logo.png" alt="CWC" style={{ width: '40px', height: '40px', objectFit: 'contain' }} onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/40?text=CWC'; }} />
       </div>
@@ -160,28 +178,14 @@ const Dashboard = ({ data }) => {
             let targetMin = 0;
             let targetLabel = "";
             
-            if(o.level === 'EE') {
-                targetMin = 3; 
-                targetLabel = "Target: 3-5";
-            } else if (o.level === 'SE') {
-                targetMin = 3; 
-                targetLabel = "Target: 3-4";
-            } else if (o.level === 'SDO' || o.level === 'AEE') {
-                targetMin = Math.ceil(totalSites * 0.33); 
-                targetLabel = `Target: ~${targetMin} (33%)`;
-            } else if (o.level === 'JE') {
-                targetMin = totalSites; 
-                targetLabel = `Target: ${totalSites} (100%)`;
-            } else {
-                targetLabel = "As Required"; 
-            }
+            if(o.level === 'EE') { targetMin = 3; targetLabel = "Target: 3-5"; } 
+            else if (o.level === 'SE') { targetMin = 3; targetLabel = "Target: 3-4"; } 
+            else if (o.level === 'SDO' || o.level === 'AEE') { targetMin = Math.ceil(totalSites * 0.33); targetLabel = `Target: ~${targetMin} (33%)`; } 
+            else if (o.level === 'JE') { targetMin = totalSites; targetLabel = `Target: ${totalSites} (100%)`; } 
+            else { targetLabel = "As Required"; }
 
             const percentage = targetMin > 0 ? Math.min(100, (myReports.length / targetMin) * 100) : 100;
-            
-            let color = "#3b82f6";
-            if(percentage >= 100) color = "#10b981";
-            else if(percentage >= 50) color = "#f59e0b";
-            else color = "#ef4444";
+            let color = percentage >= 100 ? "#10b981" : percentage >= 50 ? "#f59e0b" : "#ef4444";
 
             return { name: o.name, desig: o.designation, level: o.level, count: myReports.length, targetLabel, percentage, color };
         })
@@ -266,6 +270,7 @@ export default function App() {
   
   // Admin State
   const [jurisdictionInput, setJurisdictionInput] = useState('');
+  const [selectedRole, setSelectedRole] = useState('SDO'); // New state to track role for dropdown
   const [isEditing, setIsEditing] = useState(false);
   const [originalName, setOriginalName] = useState('');
 
@@ -283,7 +288,7 @@ export default function App() {
         console.warn("Using Fallback");
         setData(FALLBACK_DATA);
       } finally {
-        const saved = localStorage.getItem('cwc_v24_user');
+        const saved = localStorage.getItem('cwc_v26_user');
         if(saved) {
           const u = JSON.parse(saved);
           setUser(u);
@@ -298,7 +303,7 @@ export default function App() {
   const handleLogin = (u, p) => {
     if(String(u.password).trim() === String(p).trim()) {
       setUser(u);
-      localStorage.setItem('cwc_v24_user', JSON.stringify(u));
+      localStorage.setItem('cwc_v26_user', JSON.stringify(u));
       setView('APP');
       setActiveTab(u.level === 'ADMIN' ? 'ADMIN' : 'HOME');
     } else {
@@ -327,8 +332,14 @@ export default function App() {
 
   const handleWorkflowAction = async (report, actionType, complianceNote) => {
       let nextStatus = '';
-      if(actionType === 'COMPLY') nextStatus = 'Pending EE';
-      else if (actionType === 'APPROVE') nextStatus = getNextStatus(report.status, report.inspectorRole);
+      
+      if(actionType === 'COMPLY') {
+          // SDO Action: Always goes to EE first
+          nextStatus = 'Pending EE';
+      } else if (actionType === 'APPROVE') {
+          // EE/SE/CE Action: Follows hierarchy
+          nextStatus = getNextStatus(report.status, report.inspectorRole);
+      }
 
       try {
           await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'UPDATE_STATUS', rowId: report.id, status: nextStatus, note: complianceNote }) });
@@ -359,6 +370,7 @@ export default function App() {
       setIsEditing(true);
       setOriginalName(officer.name);
       setJurisdictionInput(officer.jurisdiction);
+      setSelectedRole(officer.level);
       setTimeout(() => {
           if(document.getElementsByName('n')[0]) {
               document.getElementsByName('n')[0].value = officer.name;
@@ -377,6 +389,7 @@ export default function App() {
     setJurisdictionInput(newVal);
   };
 
+  // --- FILTER LOGIC ---
   const filteredSites = useMemo(() => {
     if(!user || !data.sites) return [];
     const rawJuris = user.jurisdiction || 'ALL';
@@ -412,20 +425,12 @@ export default function App() {
           <div className="logo-container">
               <img src="https://cwc.gov.in/sites/default/files/cwc-logo.png" alt="CWC Logo" style={{ width: '80px' }} />
           </div>
-          
           <div style={{ fontSize: '11px', fontWeight: '800', letterSpacing: '2px', textTransform: 'uppercase', opacity: 0.7, marginBottom: '8px' }}>Government of India</div>
-          <h1 style={{ fontSize: '28px', fontWeight: '800', margin: '0 0 10px 0', lineHeight: 1.3, fontFamily: 'Playfair Display' }}>Central Water Commission</h1>
+          <h1 style={{ fontSize: '28px', fontWeight: '900', margin: '0 0 10px 0', lineHeight: 1.3, fontFamily: 'Playfair Display' }}>Central Water Commission</h1>
           <div style={{ fontSize: '16px', fontWeight: '400', opacity: 0.9, marginBottom: '20px' }}>Cauvery & Southern Rivers Organisation</div>
-          
           <div style={{ width: '40px', height: '4px', background: '#3b82f6', borderRadius: '2px', margin: '20px auto', opacity: 0.8 }}></div>
-          
-          <p style={{ fontSize: '13px', opacity: 0.7, maxWidth: '80%', margin: '0 auto' }}>
-              Official Inspection & Monitoring System
-          </p>
-
-          <button onClick={() => setView('LOGIN')} className="splash-btn">
-              Access Portal <ArrowRight size={18}/>
-          </button>
+          <p style={{ fontSize: '13px', opacity: 0.7, maxWidth: '80%', margin: '0 auto' }}>Official Inspection & Monitoring System</p>
+          <button onClick={() => setView('LOGIN')} className="splash-btn">Access Portal <ArrowRight size={18}/></button>
       </div>
     </div>
   );
@@ -457,9 +462,11 @@ export default function App() {
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
-      <Header user={user} onLogout={() => { localStorage.removeItem('cwc_v24_user'); setView('LOGIN'); }} />
+      <Header user={user} onLogout={() => { localStorage.removeItem('cwc_v26_user'); setView('LOGIN'); }} />
       <div style={{ flex: 1, position: 'relative', marginTop: '65px' }}>
         {activeTab === 'DASHBOARD' && <Dashboard data={data} />}
+        
+        {/* MAP TAB */}
         <div style={{ position: 'absolute', inset: 0, opacity: activeTab==='HOME'?1:0, pointerEvents: activeTab==='HOME'?'auto':'none' }}>
            <MapContainer center={[11.0, 78.0]} zoom={7} zoomControl={false} style={{ height: '100%', width: '100%' }}>
               <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
@@ -468,7 +475,7 @@ export default function App() {
                 <Marker key={site.id} position={[site.lat, site.lng]} icon={createPin(site.status === 'Inspected' ? '#10b981' : '#3b82f6')} eventHandlers={{ click: () => setSelectedSite(site) }} />
               ))}
            </MapContainer>
-           <div style={{ position: 'absolute', top: '20px', left: '20px', right: '20px', zIndex: 500 }}>
+           <div className="map-search" style={{ position: 'absolute', top: '20px', left: '20px', right: '20px', zIndex: 500 }}>
               <div style={{ background: 'white', borderRadius: '16px', padding: '10px 16px', boxShadow: '0 8px 20px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: '12px' }}>
                  <Search size={20} color="#94a3b8"/><input className="modern-input" style={{ border: 'none', background: 'transparent', padding: '5px 0', fontSize: '16px' }} placeholder="Search sites..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
               </div>
@@ -499,27 +506,49 @@ export default function App() {
              </div>
            )}
         </div>
+
+        {/* TASKS TAB (Updated Logic for 10 SDOs) */}
         {activeTab === 'APPROVALS' && (
            <div style={{ padding: '20px', height: '100%', overflowY: 'auto' }}>
               <h2 style={{ fontSize: '20px', fontWeight: '900', marginBottom: '20px' }}>Pending Actions</h2>
               {data.reports.map((r, i) => {
-                 const showSDO = user.level === 'SDO' && r.status === 'Pending Compliance';
+                 
+                 // *** UPDATED SDO LOGIC: Check Jurisdiction ***
+                 const userJurisdiction = (user.jurisdiction || "").toLowerCase();
+                 const reportSite = (r.site || "").toLowerCase();
+                 const isSiteInJurisdiction = userJurisdiction === 'all' || userJurisdiction.includes(reportSite);
+
+                 // FILTER: Only show what this user needs to act on
+                 const showSDO = user.level === 'SDO' && r.status === 'Pending Compliance' && isSiteInJurisdiction;
                  const showEE  = user.level === 'EE' && r.status === 'Pending EE';
                  const showSE  = user.level === 'SE' && r.status === 'Pending SE';
                  const showCE  = user.level === 'CE' && r.status === 'Pending CE';
+                 
                  if (!showSDO && !showEE && !showSE && !showCE) return null;
+
                  return (
                     <div key={i} style={{ background: 'white', padding: '20px', borderRadius: '16px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)', marginBottom: '15px' }}>
                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                            <span style={{ fontWeight: '800', fontSize: '16px' }}>{r.site}</span>
                            <span className="status-badge" style={{ background: '#e0f2fe', color: '#0369a1' }}>{r.status}</span>
                        </div>
-                       <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '15px' }}><div><strong>Observation by {r.inspectorRole}:</strong> "{r.remarks}"</div></div>
+                       <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '15px' }}>
+                           <div><strong>Observation by {r.inspectorRole}:</strong> "{r.remarks}"</div>
+                       </div>
+                       
+                       {/* SDO: SUBMIT COMPLIANCE */}
                        {showSDO && (
-                           <div><textarea id={`comp-${r.id}`} className="modern-input" placeholder="Enter compliance details..." style={{ height: '60px', marginBottom: '10px' }}></textarea><button onClick={()=>handleWorkflowAction(r, 'COMPLY', document.getElementById(`comp-${r.id}`).value)} style={{ width: '100%', padding: '10px', background: '#2563eb', color: 'white', borderRadius: '8px', fontWeight: '700', border:'none' }}>Submit Compliance</button></div>
+                           <div>
+                               <textarea id={`comp-${r.id}`} className="modern-input" placeholder="Enter compliance details..." style={{ height: '60px', marginBottom: '10px' }}></textarea>
+                               <button onClick={()=>handleWorkflowAction(r, 'COMPLY', document.getElementById(`comp-${r.id}`).value)} style={{ width: '100%', padding: '10px', background: '#2563eb', color: 'white', borderRadius: '8px', fontWeight: '700', border:'none' }}>Submit Compliance</button>
+                           </div>
                        )}
+
+                       {/* EE/SE/CE: APPROVE/FORWARD */}
                        {(showEE || showSE || showCE) && (
-                           <button onClick={()=>handleWorkflowAction(r, 'APPROVE')} style={{ width: '100%', padding: '12px', background: '#059669', color: 'white', borderRadius: '8px', fontWeight: '700', border:'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}><CheckCircle size={16}/> Verify & Approve</button>
+                           <button onClick={()=>handleWorkflowAction(r, 'APPROVE')} style={{ width: '100%', padding: '12px', background: '#059669', color: 'white', borderRadius: '8px', fontWeight: '700', border:'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                               <CheckCircle size={16}/> Verify & Approve
+                           </button>
                        )}
                     </div>
                  );
@@ -527,6 +556,8 @@ export default function App() {
               <div style={{ textAlign: 'center', color: '#94a3b8', marginTop: '20px', fontSize: '12px' }}>No further pending tasks.</div>
            </div>
         )}
+
+        {/* ADMIN TAB (Updated with 10 SDOs) */}
         {activeTab === 'ADMIN' && (
            <div style={{ padding: '20px', height: '100%', overflowY: 'auto' }}>
               <h2 style={{ fontSize: '20px', fontWeight: '900', marginBottom: '20px' }}>User Management</h2>
@@ -544,18 +575,39 @@ export default function App() {
                          <input name="d" placeholder="Designation" className="modern-input" required/>
                          <input name="o" placeholder="Office" className="modern-input" required/>
                       </div>
+                      
+                      {/* JURISDICTION HELPER */}
                       <div>
                           <input name="j" placeholder="Jurisdiction (Type or Select below)" className="modern-input" required value={jurisdictionInput} onChange={(e) => setJurisdictionInput(e.target.value)}/>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
                              <PlusCircle size={16} color="#64748b" />
                              <select className="filter-select" style={{ width: '100%' }} onChange={(e) => handleJurisdictionAdd(e.target.value)}>
                                  <option value="">Quick Add Location...</option>
-                                 <option value="ALL">ALL (Admin/Chief)</option>
-                                 {uniqueLocations.map((loc, i) => <option key={i} value={loc}>{loc}</option>)}
+                                 {/* CONDITIONAL DROPDOWN CONTENT */}
+                                 {selectedRole === 'SDO' ? (
+                                     <>
+                                        <option disabled>--- 10 SDO Jurisdictions ---</option>
+                                        {SDO_JURISDICTIONS.map((loc, i) => <option key={i} value={loc}>{loc}</option>)}
+                                     </>
+                                 ) : (
+                                     <>
+                                        <option value="ALL">ALL (Admin/Chief)</option>
+                                        <option disabled>--- Sites & Districts ---</option>
+                                        {uniqueLocations.map((loc, i) => <option key={i} value={loc}>{loc}</option>)}
+                                     </>
+                                 )}
                              </select>
                           </div>
                       </div>
-                      <select name="l" className="modern-input"><option value="SDO">SDO (Compliance)</option><option value="EE">EE (Executive Eng.)</option><option value="SE">SE (Superintending Eng.)</option><option value="CE">CE (Chief Eng.)</option><option value="ADMIN">Admin</option></select>
+
+                      <select name="l" className="modern-input" value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)}>
+                          <option value="SDO">SDO (Compliance)</option>
+                          <option value="EE">EE (Executive Eng.)</option>
+                          <option value="SE">SE (Superintending Eng.)</option>
+                          <option value="CE">CE (Chief Eng.)</option>
+                          <option value="ADMIN">Admin</option>
+                      </select>
+                      
                       <input name="p" placeholder="Set Password" className="modern-input" required/>
                       <button style={{ padding: '12px', background: isEditing?'#f59e0b':'#1e3a8a', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>{isEditing ? <Save size={16}/> : <UserPlus size={16}/>}{isEditing ? "Update Account" : "Create Account"}</button>
                   </form>
