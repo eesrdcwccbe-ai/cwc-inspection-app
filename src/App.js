@@ -4,7 +4,7 @@ import {
   Search, Map as MapIcon, Shield, X, LogOut, CheckCircle, 
   ClipboardList, UserPlus, BarChart2, PlusCircle, Edit2, Save, ArrowRight, 
   Target, Activity, AlertTriangle, CheckSquare, Clock, User, Lock, 
-  ChevronDown, RotateCcw, Building, Cloud, Check
+  ChevronDown, RotateCcw, Building, Cloud, Check, Menu
 } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -29,6 +29,7 @@ const createPin = (color) => L.divIcon({
 // ==========================================
 // 2. CONFIGURATION
 // ==========================================
+// *** MAKE SURE THIS URL IS CORRECT ***
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwBWcUGujkO8ZpIryU2AxcNE_LK5lHGEOZ-g_xfU2ue1XR6aF1EeZON0nbBP7T-Kd2C/exec"; 
 
 const SDO_OFFICES = [
@@ -44,7 +45,6 @@ const SDO_OFFICES = [
     "Palar Ponnaiyar Sub Division, Chennai"
 ];
 
-// CSRO JURISDICTION
 const CSRO_BOUNDARY = {
   "type": "FeatureCollection",
   "features": [
@@ -59,7 +59,6 @@ const CSRO_BOUNDARY = {
     }
   ]
 };
-
 // *** 131 SITES (FULL LIST) ***
 const ALL_SITES = [
   {id: 1, name: 'Balasamudram', district: 'Dindugal', lat: 10.42546, lng: 77.53388},
@@ -575,7 +574,7 @@ export default function App() {
         console.warn("Using Fallback Data");
         setData(FALLBACK_DATA);
       } finally {
-        const saved = localStorage.getItem('cwc_v56_user');
+        const saved = localStorage.getItem('cwc_v57_user');
         if(saved) {
           const u = JSON.parse(saved);
           setUser(u);
@@ -589,24 +588,27 @@ export default function App() {
 
   const handleLogin = (e) => {
       e.preventDefault();
-      // REMOVED DELAY FOR INSTANT ACCESS
-      const officer = data.officers.find(o => 
-          o.name.toLowerCase().trim() === loginUser.toLowerCase().trim() && 
-          String(o.password).trim() === String(loginPass).trim()
-      );
+      setIsLoading(true);
+      setTimeout(() => {
+          const officer = data.officers.find(o => 
+              o.name.toLowerCase().trim() === loginUser.toLowerCase().trim() && 
+              String(o.password).trim() === String(loginPass).trim()
+          );
 
-      if (officer) {
-          setUser(officer);
-          localStorage.setItem('cwc_v56_user', JSON.stringify(officer));
-          setView('APP');
-          setActiveTab(officer.level === 'ADMIN' ? 'ADMIN' : 'HOME');
-      } else {
-          alert("Invalid Credentials. Please check name and password.");
-      }
+          if (officer) {
+              setUser(officer);
+              localStorage.setItem('cwc_v57_user', JSON.stringify(officer));
+              setView('APP');
+              setActiveTab(officer.level === 'ADMIN' ? 'ADMIN' : 'HOME');
+          } else {
+              alert("Invalid Credentials. Please check name and password.");
+          }
+          setIsLoading(false);
+      }, 1000);
   };
 
   const handleLogout = () => {
-      localStorage.removeItem('cwc_v56_user');
+      localStorage.removeItem('cwc_v57_user');
       setUser(null);
       setLoginUser('');
       setLoginPass('');
@@ -664,12 +666,16 @@ export default function App() {
   const addOrUpdateUser = async (e) => {
     e.preventDefault();
     setIsSaving(true);
-    const f = e.target;
     
-    // 1. OPTIMISTIC UPDATE (INSTANT)
+    // FORM EXTRACTION USING FORMDATA (Robust)
+    const formData = new FormData(e.target);
     const newOfficer = { 
-        name: f.n.value, designation: f.d.value, office: officeInput, 
-        level: f.l.value, password: f.p.value, jurisdiction: jurisdictionInput 
+        name: formData.get('n'), 
+        designation: formData.get('d'), 
+        office: officeInput, 
+        level: formData.get('l'), 
+        password: formData.get('p'), 
+        jurisdiction: jurisdictionInput 
     };
 
     if(isEditing) {
@@ -679,11 +685,9 @@ export default function App() {
         setData(prev => ({ ...prev, officers: [...prev.officers, newOfficer] }));
     }
     
-    // 2. RESET UI
-    f.reset(); setJurisdictionInput(''); setOfficeInput(''); setIsEditing(false); setOriginalName('');
+    e.target.reset(); setJurisdictionInput(''); setOfficeInput(''); setIsEditing(false); setOriginalName('');
     setSyncStatus('Syncing...');
 
-    // 3. BACKGROUND SYNC
     const payload = { 
         action: isEditing ? 'UPDATE_USER' : 'ADD_USER',
         oldName: originalName, ...newOfficer 
@@ -706,11 +710,11 @@ export default function App() {
       setOfficeInput(officer.office || '');
       setSelectedRole(officer.level);
       setTimeout(() => {
-          if(document.getElementsByName('n')[0]) {
-              document.getElementsByName('n')[0].value = officer.name;
-              document.getElementsByName('d')[0].value = officer.designation;
-              document.getElementsByName('l')[0].value = officer.level;
-              document.getElementsByName('p')[0].value = officer.password;
+          const form = document.getElementById('adminForm');
+          if (form) {
+            form.n.value = officer.name;
+            form.d.value = officer.designation;
+            form.p.value = officer.password;
           }
       }, 100);
   };
@@ -810,8 +814,8 @@ export default function App() {
                   </div>
               </div>
 
-              <button type="submit" className="login-btn" disabled={isLoading}>
-                  {isLoading ? 'Verifying...' : 'Access Dashboard'} {!isLoading && <ArrowRight size={18} />}
+              <button type="submit" className="login-btn">
+                  Access Dashboard <ArrowRight size={18} />
               </button>
           </form>
       </div>
@@ -943,31 +947,33 @@ export default function App() {
                         </button>
                       }
                   </div>
-                  <form onSubmit={addOrUpdateUser} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <form id="adminForm" onSubmit={addOrUpdateUser} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                       <input name="n" placeholder="Full Name" className="modern-input" required/>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                          <input name="d" placeholder="Designation" className="modern-input" required/>
                          <div style={{position:'relative'}}>
-                             <input name="o" placeholder="Office" className="modern-input" value={officeInput} onChange={(e)=>setOfficeInput(e.target.value)} list="officeList" required/>
-                             <datalist id="officeList">
-                                 {SDO_OFFICES.map((off, i) => <option key={i} value={off} />)}
-                             </datalist>
-                             <Building size={16} style={{position:'absolute', right:12, top:16, pointerEvents:'none', color:'#64748b'}}/>
+                             {/* QUICK OFFICE SELECTOR BUTTON + INPUT */}
+                             <div style={{display: 'flex', gap: '5px'}}>
+                                <input name="o" placeholder="Office" className="modern-input" value={officeInput} onChange={(e)=>setOfficeInput(e.target.value)} required style={{flex:1}}/>
+                                <div style={{position:'relative', width:'40px'}}>
+                                    <select onChange={(e)=>{setOfficeInput(e.target.value)}} style={{width:'100%', height:'100%', opacity:0, cursor:'pointer', position:'absolute', left:0, top:0}}>
+                                        <option value="">Select...</option>
+                                        {SDO_OFFICES.map(o=><option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                    <div style={{width:'100%', height:'100%', background:'#f1f5f9', borderRadius:'8px', display:'flex', alignItems:'center', justifyContent:'center'}}>
+                                        <ChevronDown size={16} color="#64748b"/>
+                                    </div>
+                                </div>
+                             </div>
                          </div>
                       </div>
                       <div>
                           <input name="j" placeholder="Jurisdiction (Type or Select below)" className="modern-input" required value={jurisdictionInput} onChange={(e) => setJurisdictionInput(e.target.value)}/>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
                              <PlusCircle size={16} color="#64748b" />
-                             
                              <select className="filter-select" onChange={(e) => handleJurisdictionAdd(e.target.value)} value="">
                                  <option value="">Quick Add Location...</option>
                                  <option value="ALL">ALL (Admin/Chief)</option>
-                                 {selectedRole === 'SDO' && (
-                                     <optgroup label="--- SDO Offices ---">
-                                        {SDO_OFFICES.map((loc, i) => <option key={i} value={loc}>{loc}</option>)}
-                                     </optgroup>
-                                 )}
                                  <optgroup label="--- Districts ---">
                                      {availableDistricts.map(d => <option key={d} value={d}>{d}</option>)}
                                  </optgroup>
@@ -975,7 +981,6 @@ export default function App() {
                                      {availableSites.map(s => <option key={s} value={s}>{s}</option>)}
                                  </optgroup>
                              </select>
-
                           </div>
                       </div>
                       <select name="l" className="modern-input" value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)}>
@@ -993,7 +998,7 @@ export default function App() {
                   </form>
               </div>
               
-              <div style={{maxHeight: '400px', overflowY: 'auto'}}>
+              <div style={{flex: 1, overflowY: 'auto'}}>
                   <h3 style={{ fontSize: '14px', fontWeight: '800', color: '#64748b', marginBottom: '10px', textTransform: 'uppercase' }}>
                       Existing Officers ({sortedOfficers.length})
                   </h3>
